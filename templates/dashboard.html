@@ -1,0 +1,675 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — NetTrace{% endblock %}
+
+{% block extra_style %}
+<style>
+/* ── layout ── */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 330px;
+  gap: 1.5rem;
+  align-items: start;
+}
+.left-col { display: flex; flex-direction: column; gap: 1.5rem; }
+
+/* ── stat bar ── */
+.stat-bar {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 1rem;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem;
+  text-align: center;
+}
+.stat .num {
+  font-family: var(--font-head);
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+.stat .lbl {
+  font-size: .6rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: .35rem;
+}
+
+/* ── role badge ── */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .25rem .7rem;
+  border-radius: 20px;
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.role-badge.host       { background: rgba(0,255,204,.12); color: var(--accent);  border: 1px solid rgba(0,255,204,.3); }
+.role-badge.controller { background: rgba(255,60,172,.12); color: var(--accent2); border: 1px solid rgba(255,60,172,.3); }
+
+/* ── online panel ── */
+.online-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+.online-panel::after {
+  content: '';
+  position: absolute;
+  top:0; left:0; right:0;
+  height: 2px;
+  background: linear-gradient(90deg, #00ffcc, #00aaff);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.panel-head h3 {
+  font-family: var(--font-head);
+  font-size: .95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100% { box-shadow: 0 0 0 0 rgba(0,255,204,.6); }
+  50%      { box-shadow: 0 0 0 6px rgba(0,255,204,0); }
+}
+.online-count {
+  background: rgba(0,255,204,.12);
+  color: var(--accent);
+  border-radius: 20px;
+  padding: .18rem .65rem;
+  font-size: .7rem;
+  font-family: var(--font-mono);
+}
+
+.online-list { padding: .4rem 0; min-height: 60px; }
+
+.online-user {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .6rem 1.1rem;
+  transition: background .15s;
+  animation: slideIn .25s ease both;
+}
+.online-user:hover { background: rgba(255,255,255,.03); }
+@keyframes slideIn {
+  from { opacity:0; transform:translateX(-6px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+
+.avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#00e5ff,#00ffcc);
+  display: flex; align-items:center; justify-content:center;
+  font-family: var(--font-head);
+  font-size: .85rem; font-weight: 700;
+  color: #000;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+.avatar.self       { background: linear-gradient(135deg,var(--accent2),#ff8c00); }
+.avatar.controller { background: linear-gradient(135deg,var(--accent2),#9b59b6); }
+
+.user-info { flex: 1; min-width: 0; }
+.user-name {
+  font-size: .83rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: .35rem; flex-wrap: wrap;
+}
+.you-tag {
+  font-size: .58rem;
+  background: rgba(255,60,172,.15);
+  color: var(--accent2);
+  border-radius: 4px;
+  padding: .08rem .3rem;
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+}
+.user-meta {
+  display: flex; align-items: center; gap: .5rem;
+  margin-top: .2rem; flex-wrap: wrap;
+}
+.user-ip { font-size: .7rem; color: var(--accent); font-family: var(--font-mono); }
+.occupied-tag {
+  font-size: .6rem;
+  background: rgba(255,160,0,.15);
+  color: #ffaa00;
+  border: 1px solid rgba(255,160,0,.3);
+  border-radius: 4px;
+  padding: .08rem .35rem;
+  font-family: var(--font-mono);
+  letter-spacing: .5px;
+}
+.controlled-tag {
+  font-size: .6rem;
+  background: rgba(0,200,100,.12);
+  color: #00c864;
+  border: 1px solid rgba(0,200,100,.3);
+  border-radius: 4px;
+  padding: .08rem .35rem;
+  font-family: var(--font-mono);
+}
+
+/* ── request button ── */
+.req-btn {
+  flex-shrink: 0;
+  padding: .3rem .65rem;
+  border-radius: 6px;
+  font-size: .7rem;
+  font-family: var(--font-head);
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--accent2);
+  background: rgba(255,60,172,.1);
+  color: var(--accent2);
+  transition: background .2s, transform .1s;
+  letter-spacing: .5px;
+}
+.req-btn:hover   { background: rgba(255,60,172,.22); }
+.req-btn:active  { transform: scale(.96); }
+.req-btn:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+  border-color: var(--muted);
+  color: var(--muted);
+  background: transparent;
+}
+.req-btn.pending {
+  border-color: #ffaa00;
+  background: rgba(255,170,0,.1);
+  color: #ffaa00;
+}
+
+/* ── status bar ── */
+.status-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .85rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  font-size: .82rem;
+}
+.status-bar .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-green  { background: #00c864; box-shadow: 0 0 6px #00c864; }
+.dot-orange { background: #ffaa00; box-shadow: 0 0 6px #ffaa00; }
+.dot-muted  { background: var(--muted); }
+.status-bar .release-btn {
+  margin-left: auto;
+  padding: .28rem .7rem;
+  border-radius: 6px;
+  font-size: .68rem;
+  font-family: var(--font-head);
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--error);
+  background: rgba(255,60,172,.1);
+  color: var(--error);
+  transition: background .2s;
+}
+.status-bar .release-btn:hover { background: rgba(255,60,172,.2); }
+
+/* ── request incoming popup ── */
+.popup-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.popup-overlay.visible { display: flex; }
+.popup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 2rem;
+  width: 340px;
+  text-align: center;
+  position: relative;
+  animation: popIn .25s ease both;
+}
+@keyframes popIn {
+  from { opacity:0; transform:scale(.9); }
+  to   { opacity:1; transform:scale(1); }
+}
+.popup::before {
+  content:'';
+  position: absolute;
+  top:0;left:0;right:0;
+  height:2px;
+  border-radius:14px 14px 0 0;
+  background: linear-gradient(90deg,var(--accent2),var(--accent));
+}
+.popup h3 { font-family:var(--font-head); font-size:1.1rem; margin-bottom:.5rem; }
+.popup p  { color:var(--muted); font-size:.82rem; margin-bottom:1.5rem; }
+.popup .popup-name { color: var(--text); font-weight:700; }
+.popup-btns { display:flex; gap:.75rem; }
+.popup-btns button {
+  flex:1; padding:.7rem;
+  border-radius:8px;
+  font-family:var(--font-head);
+  font-size:.9rem; font-weight:600;
+  cursor:pointer;
+  border:none;
+  transition: opacity .2s;
+}
+.popup-btns button:hover { opacity:.85; }
+.btn-accept  { background:var(--accent);  color:#000; }
+.btn-decline { background:transparent; border:1px solid var(--muted) !important; color:var(--muted); }
+
+/* ── refresh footer ── */
+.refresh-info {
+  padding: .55rem 1.2rem;
+  border-top: 1px solid var(--border);
+  font-size: .62rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#refresh-countdown { color:var(--accent); font-weight:700; }
+
+/* ── history table ── */
+.ip-table-wrap {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  position:relative;
+}
+.ip-table-wrap::after {
+  content:'';
+  position:absolute; top:0;left:0;right:0;
+  height:2px;
+  background:linear-gradient(90deg,var(--accent2),var(--accent));
+}
+.table-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:1rem 1.4rem;
+  border-bottom:1px solid var(--border);
+}
+.table-head h3 { font-family:var(--font-head); font-size:.95rem; font-weight:600; }
+.badge {
+  background:rgba(0,255,204,.12); color:var(--accent);
+  border-radius:20px; padding:.18rem .65rem;
+  font-size:.7rem; letter-spacing:1px;
+}
+table { width:100%; border-collapse:collapse; }
+thead th {
+  text-align:left; padding:.7rem 1.4rem;
+  font-size:.6rem; letter-spacing:2px; text-transform:uppercase;
+  color:var(--muted); border-bottom:1px solid var(--border);
+}
+tbody tr:hover { background:rgba(255,255,255,.025); }
+tbody tr+tr td { border-top:1px solid var(--border); }
+tbody td { padding:.75rem 1.4rem; font-size:.83rem; }
+.ip-cell   { font-family:var(--font-mono); color:var(--accent); }
+.time-cell { color:var(--muted); font-size:.78rem; }
+.empty { text-align:center; padding:2.5rem; color:var(--muted); font-size:.85rem; }
+.empty-online { text-align:center; padding:2rem 1rem; color:var(--muted); font-size:.8rem; }
+
+@media(max-width:720px){ .dash-grid{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="container dash-wrap">
+
+  <!-- topbar -->
+  <div class="topbar">
+    <div class="logo">Net<span>Trace</span></div>
+    <div style="display:flex;align-items:center;gap:.8rem;">
+      <span class="role-badge {{ role }}">{{ '🎮' if role=='controller' else '🖥' }} {{ role }}</span>
+      <a href="/logout" class="logout-btn">logout</a>
+    </div>
+  </div>
+
+  <!-- control status bar -->
+  <div id="status-bar-wrap" style="margin-bottom:1.5rem;">
+    {% if role == 'controller' %}
+      {% if control_state.controlling %}
+      <div class="status-bar">
+        <div class="dot dot-green"></div>
+        <span>Controlling host <strong>{{ control_state.controlling }}</strong></span>
+        <button class="release-btn" onclick="releaseControl()">Disconnect</button>
+      </div>
+      {% else %}
+      <div class="status-bar">
+        <div class="dot dot-muted"></div>
+        <span style="color:var(--muted);">Not connected to any host</span>
+      </div>
+      {% endif %}
+    {% else %}
+      {% if control_state.controlled_by %}
+      <div class="status-bar">
+        <div class="dot dot-orange"></div>
+        <span>Being controlled by <strong>{{ control_state.controlled_by }}</strong></span>
+        <button class="release-btn" onclick="releaseControl()">Kick</button>
+      </div>
+      {% else %}
+      <div class="status-bar">
+        <div class="dot dot-muted"></div>
+        <span style="color:var(--muted);">Waiting for a controller</span>
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <div class="dash-grid">
+
+    <!-- LEFT -->
+    <div class="left-col">
+      <div class="stat-bar">
+        <div class="stat">
+          <div class="num">{{ ips|length }}</div>
+          <div class="lbl">Total Logins</div>
+        </div>
+        <div class="stat">
+          <div class="num">{{ ips|map(attribute='ip')|list|unique|list|length }}</div>
+          <div class="lbl">Unique IPs</div>
+        </div>
+        <div class="stat">
+          <div class="num" style="font-size:1rem;padding-top:.5rem;">{{ username }}</div>
+          <div class="lbl">Logged in as</div>
+        </div>
+      </div>
+
+      <div class="ip-table-wrap">
+        <div class="table-head">
+          <h3>My Login History</h3>
+          <span class="badge">{{ ips|length }} records</span>
+        </div>
+        {% if ips %}
+        <table>
+          <thead><tr><th>#</th><th>IP Address</th><th>Timestamp</th></tr></thead>
+          <tbody>
+            {% for row in ips %}
+            <tr>
+              <td style="color:var(--muted);font-size:.72rem;">{{ loop.index }}</td>
+              <td class="ip-cell">{{ row.ip }}</td>
+              <td class="time-cell">{{ row.logged_at }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No login records yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- RIGHT: online users -->
+    <div class="online-panel">
+      <div class="panel-head">
+        <h3><span class="live-dot"></span>&nbsp;Online Now</h3>
+        <span class="online-count" id="online-count">{{ online_users|length }}</span>
+      </div>
+
+      <div class="online-list" id="online-list">
+        {% if online_users %}
+          {% for u in online_users %}
+          <div class="online-user">
+            <div class="avatar {% if u.username == username %}self{% elif u.role=='controller' %}controller{% endif %}">
+              {{ u.username[0]|upper }}
+            </div>
+            <div class="user-info">
+              <div class="user-name">
+                {{ u.username }}
+                {% if u.username == username %}<span class="you-tag">YOU</span>{% endif %}
+                <span class="role-badge {{ u.role }}" style="font-size:.55rem;padding:.1rem .4rem;">{{ u.role }}</span>
+              </div>
+              <div class="user-meta">
+                <span class="user-ip">{{ u.ip }}</span>
+                {% if u.controlled_by %}
+                  <span class="occupied-tag">⚡ {{ u.controlled_by }}</span>
+                {% endif %}
+              </div>
+            </div>
+            {% if role == 'controller' and u.role == 'host' and u.username != username %}
+              {% if u.controlled_by %}
+                <button class="req-btn" disabled title="{{ u.username }} is occupied by {{ u.controlled_by }}">Occupied</button>
+              {% elif control_state.pending_sent and u.user_id in control_state.pending_sent|map(attribute='host_user_id')|list %}
+                <button class="req-btn pending" disabled>Pending…</button>
+              {% else %}
+                <button class="req-btn" onclick="sendRequest({{ u.user_id }}, '{{ u.username }}', this)">Request</button>
+              {% endif %}
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-online">No users online</div>
+        {% endif %}
+      </div>
+
+      <div class="refresh-info">
+        <span>refreshes in <span id="refresh-countdown">30</span>s</span>
+        <span>{{ online_timeout }}min timeout</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Incoming request popup (for hosts) ── -->
+<div class="popup-overlay" id="req-popup">
+  <div class="popup">
+    <h3>🎮 Control Request</h3>
+    <p><span class="popup-name" id="popup-ctrl-name">—</span> wants to control your machine.</p>
+    <div class="popup-btns">
+      <button class="btn-decline" onclick="respondRequest('decline')">Decline</button>
+      <button class="btn-accept"  onclick="respondRequest('accept')">Accept</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ME      = {{ username | tojson }};
+const MY_ROLE = {{ role | tojson }};
+
+let countdown   = 30;
+let pendingReqId = null;   // current incoming request id (host side)
+// track pending_sent locally (controller side): {host_id: true}
+let pendingSent = {};
+{% if role == 'controller' and control_state.pending_sent %}
+  {% for p in control_state.pending_sent %}pendingSent[{{ p.host_user_id }}] = true;{% endfor %}
+{% endif %}
+
+// ── helpers ──────────────────────────────────────────
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderStatusBar(cs) {
+  const wrap = document.getElementById('status-bar-wrap');
+  if (MY_ROLE === 'controller') {
+    if (cs.controlling) {
+      wrap.innerHTML = `<div class="status-bar">
+        <div class="dot dot-green"></div>
+        <span>Controlling host <strong>${esc(cs.controlling)}</strong></span>
+        <button class="release-btn" onclick="releaseControl()">Disconnect</button>
+      </div>`;
+    } else {
+      wrap.innerHTML = `<div class="status-bar">
+        <div class="dot dot-muted"></div>
+        <span style="color:var(--muted)">Not connected to any host</span>
+      </div>`;
+    }
+  } else {
+    if (cs.controlled_by) {
+      wrap.innerHTML = `<div class="status-bar">
+        <div class="dot dot-orange"></div>
+        <span>Being controlled by <strong>${esc(cs.controlled_by)}</strong></span>
+        <button class="release-btn" onclick="releaseControl()">Kick</button>
+      </div>`;
+    } else {
+      wrap.innerHTML = `<div class="status-bar">
+        <div class="dot dot-muted"></div>
+        <span style="color:var(--muted)">Waiting for a controller</span>
+      </div>`;
+    }
+  }
+}
+
+function renderOnline(users, cs) {
+  document.getElementById('online-count').textContent = users.length;
+  const list = document.getElementById('online-list');
+
+  if (!users.length) {
+    list.innerHTML = '<div class="empty-online">No users online</div>';
+    return;
+  }
+
+  list.innerHTML = users.map(u => {
+    const isMe    = u.username === ME;
+    const avatarClass = isMe ? 'self' : (u.role === 'controller' ? 'controller' : '');
+    const youTag  = isMe ? '<span class="you-tag">YOU</span>' : '';
+    const roleBadge = `<span class="role-badge ${u.role}" style="font-size:.55rem;padding:.1rem .4rem;">${esc(u.role)}</span>`;
+    const occupiedTag = u.controlled_by
+      ? `<span class="occupied-tag">⚡ ${esc(u.controlled_by)}</span>` : '';
+
+    let actionBtn = '';
+    if (MY_ROLE === 'controller' && u.role === 'host' && !isMe) {
+      if (cs && cs.controlling) {
+        // already controlling someone — disable all
+        actionBtn = `<button class="req-btn" disabled>Request</button>`;
+      } else if (u.controlled_by) {
+        actionBtn = `<button class="req-btn" disabled title="${esc(u.username)} is occupied by ${esc(u.controlled_by)}">Occupied</button>`;
+      } else if (pendingSent[u.user_id]) {
+        actionBtn = `<button class="req-btn pending" disabled>Pending…</button>`;
+      } else {
+        actionBtn = `<button class="req-btn" onclick="sendRequest(${u.user_id},'${esc(u.username)}',this)">Request</button>`;
+      }
+    }
+
+    return `<div class="online-user">
+      <div class="avatar ${avatarClass}">${esc(u.username[0]).toUpperCase()}</div>
+      <div class="user-info">
+        <div class="user-name">${esc(u.username)} ${youTag} ${roleBadge}</div>
+        <div class="user-meta">
+          <span class="user-ip">${esc(u.ip)}</span>
+          ${occupiedTag}
+        </div>
+      </div>
+      ${actionBtn}
+    </div>`;
+  }).join('');
+}
+
+// ── Heartbeat ─────────────────────────────────────────
+
+async function heartbeat() {
+  try {
+    const res  = await fetch('/heartbeat', {method:'POST'});
+    if (res.status === 401) { location.href='/login'; return; }
+    const data = await res.json();
+    if (data.online)         renderOnline(data.online, data.control_state);
+    if (data.control_state)  renderStatusBar(data.control_state);
+
+    // Host: check for incoming requests
+    if (MY_ROLE === 'host' && data.control_state?.pending_requests?.length) {
+      const req = data.control_state.pending_requests[0];
+      if (req.id !== pendingReqId) {
+        pendingReqId = req.id;
+        document.getElementById('popup-ctrl-name').textContent = req.controller_username;
+        document.getElementById('req-popup').classList.add('visible');
+      }
+    } else if (MY_ROLE === 'host') {
+      document.getElementById('req-popup').classList.remove('visible');
+      pendingReqId = null;
+    }
+  } catch(e) { /* ignore */ }
+  countdown = 30;
+}
+
+setInterval(() => {
+  const el = document.getElementById('refresh-countdown');
+  if (el) el.textContent = --countdown;
+  if (countdown <= 0) heartbeat();
+}, 1000);
+
+// ── Controller: send request ──────────────────────────
+
+async function sendRequest(hostId, hostName, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    const res  = await fetch(`/control/request/${hostId}`, {method:'POST'});
+    const data = await res.json();
+    if (res.status === 409 && data.error === 'occupied') {
+      alert(`${hostName} is already being controlled by ${data.by}.`);
+      btn.disabled = false;
+      btn.textContent = 'Request';
+    } else if (res.ok) {
+      pendingSent[hostId] = true;
+      btn.classList.add('pending');
+      btn.textContent = 'Pending…';
+    } else {
+      alert(data.error || 'Request failed.');
+      btn.disabled = false;
+      btn.textContent = 'Request';
+    }
+  } catch(e) {
+    alert('Network error.');
+    btn.disabled = false;
+    btn.textContent = 'Request';
+  }
+}
+
+// ── Host: respond to request ──────────────────────────
+
+async function respondRequest(action) {
+  document.getElementById('req-popup').classList.remove('visible');
+  if (!pendingReqId) return;
+  try {
+    const res  = await fetch(`/control/respond/${pendingReqId}/${action}`, {method:'POST'});
+    const data = await res.json();
+    if (action === 'accept' && data.status === 'accepted') {
+      // Notify the page immediately
+      await heartbeat();
+    }
+  } catch(e) { /* ignore */ }
+  pendingReqId = null;
+}
+
+// ── Release control ───────────────────────────────────
+
+async function releaseControl() {
+  try {
+    await fetch('/control/release', {method:'POST'});
+    pendingSent = {};
+    await heartbeat();
+  } catch(e) { /* ignore */ }
+}
+</script>
+{% endblock %}

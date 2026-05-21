@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Sign Up — AnyView{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="logo">Any<span>View</span></div>
+  <p class="tagline">IP monitoring dashboard</p>
+
+  <div class="card">
+    <h2>Create account</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+          {% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="/signup">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="choose_a_handle" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="min 6 characters" autocomplete="new-password" required>
+      </div>
+      <div class="field">
+        <label>Confirm Password</label>
+        <input type="password" name="confirm" placeholder="repeat password" autocomplete="new-password" required>
+      </div>
+
+      <!-- Role selector -->
+      <div class="field">
+        <label>Role</label>
+        <div class="role-toggle">
+          <input type="radio" name="role" id="role-host" value="host" checked>
+          <label for="role-host" class="role-opt">
+            <span class="role-icon">🖥</span>
+            <span class="role-name">Host</span>
+            <span class="role-desc">Be controlled remotely</span>
+          </label>
+
+          <input type="radio" name="role" id="role-ctrl" value="controller">
+          <label for="role-ctrl" class="role-opt">
+            <span class="role-icon">🎮</span>
+            <span class="role-name">Controller</span>
+            <span class="role-desc">Control remote hosts</span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn" type="submit">Create account →</button>
+    </form>
+
+    <div class="link-row">
+      Already have an account? <a href="/login">Sign in</a>
+    </div>
+  </div>
+</div>
+
+<style>
+  .role-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem;
+  }
+  .role-toggle input[type="radio"] { display: none; }
+
+  .role-opt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .3rem;
+    padding: .9rem .5rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    text-align: center;
+  }
+  .role-icon  { font-size: 1.4rem; }
+  .role-name  { font-family: var(--font-head); font-size: .85rem; font-weight: 600; }
+  .role-desc  { font-size: .65rem; color: var(--muted); letter-spacing: .5px; }
+
+  input[type="radio"]#role-host:checked   + .role-opt {
+    border-color: var(--accent);
+    background: rgba(0,255,204,.06);
+  }
+  input[type="radio"]#role-ctrl:checked  + .role-opt {
+    border-color: var(--accent2);
+    background: rgba(255,60,172,.06);
+  }
+</style>
+{% endblock %}

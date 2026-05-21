@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Login — AnyView{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="logo">Any<span>View</span></div>
+  <p class="tagline">IP monitoring dashboard</p>
+
+  <div class="card">
+    <h2>Sign in</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+          {% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="/login">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="your_handle" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button class="btn" type="submit">Log in →</button>
+    </form>
+
+    <div class="link-row">
+      No account? <a href="/signup">Create one</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
