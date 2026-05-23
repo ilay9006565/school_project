@@ -37,7 +37,7 @@ def init_db():
     with get_db() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                id          SERIAL PRIMARY KEY,
                 username    TEXT UNIQUE NOT NULL,
                 password    TEXT NOT NULL,
                 role        TEXT NOT NULL DEFAULT 'host',
@@ -46,7 +46,7 @@ def init_db():
         """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS client_ips (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                id        SERIAL PRIMARY KEY,
                 user_id   INTEGER NOT NULL,
                 ip        TEXT NOT NULL,
                 logged_at TEXT NOT NULL,
@@ -77,7 +77,7 @@ def init_db():
         # Pending requests: controller → host (waiting for host to accept/decline)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS control_requests (
-                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                id                  SERIAL PRIMARY KEY,
                 host_user_id        INTEGER NOT NULL,
                 controller_user_id  INTEGER NOT NULL,
                 controller_username TEXT NOT NULL,
