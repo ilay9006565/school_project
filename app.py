@@ -104,23 +104,23 @@ def mark_online(user_id, username, role, ip):
     with get_db() as conn:
         conn.execute("""
             INSERT INTO online_sessions (user_id, username, role, ip, last_seen)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT(user_id) DO UPDATE SET
                 ip=excluded.ip, last_seen=excluded.last_seen, role=excluded.role
         """, (user_id, username, role, ip, now))
 
 def mark_offline(user_id):
     with get_db() as conn:
-        conn.execute("DELETE FROM online_sessions WHERE user_id=?", (user_id,))
-        conn.execute("DELETE FROM control_sessions  WHERE host_user_id=? OR controller_user_id=?",
+        conn.execute("DELETE FROM online_sessions WHERE user_id=%s", (user_id,))
+        conn.execute("DELETE FROM control_sessions  WHERE host_user_id=%s OR controller_user_id=%s",
                      (user_id, user_id))
-        conn.execute("DELETE FROM control_requests  WHERE host_user_id=? OR controller_user_id=?",
+        conn.execute("DELETE FROM control_requests  WHERE host_user_id=%s OR controller_user_id=%s",
                      (user_id, user_id))
 
 def get_online_users():
     cutoff = (datetime.now() - timedelta(minutes=ONLINE_TIMEOUT)).strftime("%Y-%m-%d %H:%M:%S")
     with get_db() as conn:
-        conn.execute("DELETE FROM online_sessions WHERE last_seen < ?", (cutoff,))
+        conn.execute("DELETE FROM online_sessions WHERE last_seen < %s", (cutoff,))
         rows = conn.execute("""
             SELECT o.user_id, o.username, o.role, o.ip, o.last_seen,
                    cs.controller_username AS controlled_by
@@ -136,7 +136,7 @@ def get_my_control_state(user_id, role):
     with get_db() as conn:
         if role == "controller":
             cs = conn.execute(
-                "SELECT host_user_id FROM control_sessions WHERE controller_user_id=?",
+                "SELECT host_user_id FROM control_sessions WHERE controller_user_id=%s",
                 (user_id,)
             ).fetchone()
             controlling = cs["host_user_id"] if cs else None
@@ -145,13 +145,13 @@ def get_my_control_state(user_id, role):
                 SELECT cr.host_user_id, o.username AS host_username
                 FROM   control_requests cr
                 JOIN   online_sessions  o ON o.user_id = cr.host_user_id
-                WHERE  cr.controller_user_id = ?
+                WHERE  cr.controller_user_id = %s
             """, (user_id,)).fetchall()
             return {"controlling": controlling, "pending_sent": [dict(r) for r in pending]}
 
         else:  # host
             cs = conn.execute(
-                "SELECT controller_username FROM control_sessions WHERE host_user_id=?",
+                "SELECT controller_username FROM control_sessions WHERE host_user_id=%s",
                 (user_id,)
             ).fetchone()
             controlled_by = cs["controller_username"] if cs else None
@@ -159,7 +159,7 @@ def get_my_control_state(user_id, role):
             incoming = conn.execute("""
                 SELECT cr.id, cr.controller_user_id, cr.controller_username
                 FROM   control_requests cr
-                WHERE  cr.host_user_id = ?
+                WHERE  cr.host_user_id = %s
             """, (user_id,)).fetchall()
             return {"controlled_by": controlled_by, "pending_requests": [dict(r) for r in incoming]}
 
@@ -187,7 +187,7 @@ def signup():
             try:
                 with get_db() as conn:
                     conn.execute(
-                        "INSERT INTO users (username, password, role, created_at) VALUES (?,?,?,?)",
+                        "INSERT INTO users (username, password, role, created_at) VALUES (%s,%s,%s,%s)",
                         (username, hash_pw(password), role, datetime.now().isoformat())
                     )
                 flash("Account created! Please log in.", "success")
@@ -203,7 +203,7 @@ def login():
         password = request.form.get("password", "")
         with get_db() as conn:
             user = conn.execute(
-                "SELECT * FROM users WHERE username=?",
+                "SELECT * FROM users WHERE username=%s",
                 (username,)
             ).fetchone()
         if user and bcrypt.checkpw(password.encode(), user["password"].encode()):
@@ -213,7 +213,7 @@ def login():
             ip = get_ip()
             with get_db() as conn:
                 conn.execute(
-                    "INSERT INTO client_ips (user_id, ip, logged_at) VALUES (?,?,?)",
+                    "INSERT INTO client_ips (user_id, ip, logged_at) VALUES (%s,%s,%s)",
                     (user["id"], ip, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 )
             mark_online(user["id"], user["username"], user["role"], ip)
@@ -230,7 +230,7 @@ def dashboard():
     control_state = get_my_control_state(session["user_id"], session["role"])
     with get_db() as conn:
         ips = conn.execute(
-            "SELECT ip, logged_at FROM client_ips WHERE user_id=? ORDER BY logged_at DESC",
+            "SELECT ip, logged_at FROM client_ips WHERE user_id=%s ORDER BY logged_at DESC",
             (session["user_id"],)
         ).fetchall()
     return render_template("dashboard.html",
@@ -270,14 +270,14 @@ def control_request(host_id):
     with get_db() as conn:
         # Check host is online
         host = conn.execute(
-            "SELECT username FROM online_sessions WHERE user_id=? AND role='host'", (host_id,)
+            "SELECT username FROM online_sessions WHERE user_id=%s AND role='host'", (host_id,)
         ).fetchone()
         if not host:
             return jsonify({"error": "Host not found or offline"}), 404
 
         # Check host not already controlled
         occupied = conn.execute(
-            "SELECT controller_username FROM control_sessions WHERE host_user_id=?", (host_id,)
+            "SELECT controller_username FROM control_sessions WHERE host_user_id=%s", (host_id,)
         ).fetchone()
         if occupied:
             return jsonify({"error": "occupied", "by": occupied["controller_username"]}), 409
@@ -286,7 +286,7 @@ def control_request(host_id):
         try:
             conn.execute("""
                 INSERT INTO control_requests (host_user_id, controller_user_id, controller_username, requested_at)
-                VALUES (?,?,?,?)
+                VALUES (%s,%s,%s,%s)
             """, (host_id, session["user_id"], session["username"], datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         except sqlite3.IntegrityError:
             return jsonify({"error": "Request already pending"}), 409
@@ -304,29 +304,29 @@ def control_respond(req_id, action):
 
     with get_db() as conn:
         req = conn.execute(
-            "SELECT * FROM control_requests WHERE id=? AND host_user_id=?",
+            "SELECT * FROM control_requests WHERE id=%s AND host_user_id=%s",
             (req_id, session["user_id"])
         ).fetchone()
         if not req:
             return jsonify({"error": "Request not found"}), 404
 
-        conn.execute("DELETE FROM control_requests WHERE id=?", (req_id,))
+        conn.execute("DELETE FROM control_requests WHERE id=%s", (req_id,))
 
         if action == "accept":
             # Remove any previous control session for this host
-            conn.execute("DELETE FROM control_sessions WHERE host_user_id=?", (session["user_id"],))
+            conn.execute("DELETE FROM control_sessions WHERE host_user_id=%s", (session["user_id"],))
             conn.execute("""
                 INSERT INTO control_sessions (host_user_id, controller_user_id, controller_username, established_at)
-                VALUES (?,?,?,?)
+                VALUES (%s,%s,%s,%s)
             """, (session["user_id"], req["controller_user_id"],
                   req["controller_username"], datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
             # Fetch IPs so the Python scripts know who to connect to
             host_ip = conn.execute(
-                "SELECT ip FROM online_sessions WHERE user_id=?", (session["user_id"],)
+                "SELECT ip FROM online_sessions WHERE user_id=%s", (session["user_id"],)
             ).fetchone()
             ctrl_ip = conn.execute(
-                "SELECT ip FROM online_sessions WHERE user_id=?", (req["controller_user_id"],)
+                "SELECT ip FROM online_sessions WHERE user_id=%s", (req["controller_user_id"],)
             ).fetchone()
 
             return jsonify({
@@ -348,9 +348,9 @@ def control_release():
     role = session["role"]
     with get_db() as conn:
         if role == "host":
-            conn.execute("DELETE FROM control_sessions WHERE host_user_id=?", (uid,))
+            conn.execute("DELETE FROM control_sessions WHERE host_user_id=%s", (uid,))
         else:
-            conn.execute("DELETE FROM control_sessions WHERE controller_user_id=?", (uid,))
+            conn.execute("DELETE FROM control_sessions WHERE controller_user_id=%s", (uid,))
     return jsonify({"status": "released"})
 
 # mainHost / mainController call this to get connection info once paired
@@ -358,13 +358,13 @@ def control_release():
 @app.route("/api/connection_info", methods=["GET"])
 def connection_info():
     """
-    Python scripts (mainHost / mainController) poll this with ?username=X&role=Y
+    Python scripts (mainHost / mainController) poll this with %s username=X&role=Y
     Returns pairing info once a control session is established.
     """
     username = request.args.get("username", "")
     role     = request.args.get("role", "")
     with get_db() as conn:
-        user = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+        user = conn.execute("SELECT id FROM users WHERE username=%s", (username,)).fetchone()
         if not user:
             return jsonify({"paired": False, "error": "unknown user"}), 404
 
@@ -374,7 +374,7 @@ def connection_info():
                 SELECT cs.controller_username, o.ip AS controller_ip
                 FROM   control_sessions cs
                 JOIN   online_sessions  o ON o.user_id = cs.controller_user_id
-                WHERE  cs.host_user_id = ?
+                WHERE  cs.host_user_id = %s
             """, (uid,)).fetchone()
             if cs:
                 return jsonify({"paired": True, "connect_to": cs["controller_ip"],
@@ -384,7 +384,7 @@ def connection_info():
                 SELECT o.ip AS host_ip, o.username AS host_username
                 FROM   control_sessions cs
                 JOIN   online_sessions  o ON o.user_id = cs.host_user_id
-                WHERE  cs.controller_user_id = ?
+                WHERE  cs.controller_user_id = %s
             """, (uid,)).fetchone()
             if cs:
                 return jsonify({"paired": True, "connect_to": cs["host_ip"],
