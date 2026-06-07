@@ -60,6 +60,7 @@ def init_db():
                 role        TEXT NOT NULL,
                 ip          TEXT NOT NULL,
                 last_seen   TEXT NOT NULL,
+                local_ip    TEXT NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         """)
@@ -363,32 +364,61 @@ def connection_info():
     """
     username = request.args.get("username", "")
     role     = request.args.get("role", "")
+    local_ip = request.args.get("local_ip")
+    public_ip = request.remote_addr
     with get_db() as conn:
         user = conn.execute("SELECT id FROM users WHERE username=%s", (username,)).fetchone()
         if not user:
             return jsonify({"paired": False, "error": "unknown user"}), 404
 
         uid = user["id"]
+        conn.execute("""
+            UPDATE online_sessions 
+            SET ip = %s, local_ip = %s, last_seen = NOW() 
+            WHERE user_id = %s
+        """, (public_ip, local_ip, uid))
+
         if role == "host":
             cs = conn.execute("""
-                SELECT cs.controller_username, o.ip AS controller_ip
+                SELECT cs.controller_username, 
+                       o.ip AS controller_public_ip, 
+                       o.local_ip AS controller_local_ip
                 FROM   control_sessions cs
                 JOIN   online_sessions  o ON o.user_id = cs.controller_user_id
                 WHERE  cs.host_user_id = %s
             """, (uid,)).fetchone()
+
             if cs:
-                return jsonify({"paired": True, "connect_to": cs["controller_ip"],
-                                "peer_username": cs["controller_username"]})
-        else:  # controller
+                if public_ip == cs["controller_public_ip"]:
+                    connect_to = cs["controller_local_ip"]
+                else:
+                    connect_to = cs["controller_public_ip"]
+
+                return jsonify({
+                    "paired": True,
+                    "connect_to": connect_to,
+                    "peer_username": cs["controller_username"]
+                })
+        else:
             cs = conn.execute("""
-                SELECT o.ip AS host_ip, o.username AS host_username
+                SELECT o.ip AS host_public_ip, 
+                       o.local_ip AS host_local_ip, 
+                       o.username AS host_username
                 FROM   control_sessions cs
                 JOIN   online_sessions  o ON o.user_id = cs.host_user_id
                 WHERE  cs.controller_user_id = %s
             """, (uid,)).fetchone()
+
             if cs:
-                return jsonify({"paired": True, "connect_to": cs["host_ip"],
-                                "peer_username": cs["host_username"]})
+                if public_ip == cs["host_public_ip"]:
+                    connect_to = cs["host_local_ip"]
+                else:
+                    connect_to = cs["host_public_ip"]
+                return jsonify({
+                    "paired": True,
+                    "connect_to": connect_to,
+                    "peer_username": cs["host_username"]
+                })
 
     return jsonify({"paired": False})
 
