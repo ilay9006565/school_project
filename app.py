@@ -365,7 +365,7 @@ def connection_info():
     username = request.args.get("username", "")
     role     = request.args.get("role", "")
     local_ip = request.args.get("local_ip")
-    public_ip = request.remote_addr
+    public_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
     with get_db() as conn:
         user = conn.execute("SELECT id FROM users WHERE username=%s", (username,)).fetchone()
         if not user:
